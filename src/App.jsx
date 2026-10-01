@@ -525,4 +525,32 @@ export default function App() {
                       <button className="remove-button" onClick={() => deleteEntry(entry.id)} aria-label={`Delete ${entry.productName}`}>
                         <Trash2 size={16} />
                       </button>
-   
+                    </article>
+                  );
+                })}
+                <div className="ledger-total">
+                  <span>{filteredEntries.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0)} packets</span>
+                  <b>{money(filteredEntries.reduce((sum, entry) => sum + entry.rate * entry.quantity * (1 - entry.discount / 100), 0))}</b>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+
+      <nav className="bottom-nav" aria-label="Stall sections">
+        <button className={`nav-stock ${activeView === 'stock' ? 'active' : ''}`} onClick={() => { setActiveView('stock'); window.scrollTo(0, 0); }} aria-pressed={activeView === 'stock'}>
+          <Package size={22} /><span>Stock</span>
+        </button>
+        <button className={`nav-entry ${activeView === 'entry' ? 'active' : ''}`} onClick={() => { setActiveView('entry'); window.scrollTo(0, 0); }} aria-pressed={activeView === 'entry'}>
+          <CirclePlus size={22} /><span>New entry</span>
+        </button>
+        <button className={`nav-saved ${activeView === 'saved' ? 'active' : ''}`} onClick={() => { setActiveView('saved'); window.scrollTo(0, 0); }} aria-pressed={activeView === 'saved'}>
+          <ListChecks size={22} /><span>Saved{entries.length > 0 ? ` ${entries.length}` : ''}</span>
+        </button>
+      </nav>
+
+      {notice && <div className="save-toast" role="status">{notice}</div>}
+    </div>
+  );
+}

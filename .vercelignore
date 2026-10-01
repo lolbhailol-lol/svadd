@@ -1,0 +1,12 @@
+node_modules
+__pycache__
+exports
+dist
+.git
+*.log
+edge_dump.html
+onedrive_landing.html
+resp_out.html
+test_output.xlsx
+.env
+.env.*

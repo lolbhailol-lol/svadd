@@ -20,8 +20,9 @@ TEMPLATE_PATH = os.path.join(BASE_DIR, 'Billing_Format.xlsx')
 STALL_STATE_FILE = os.path.join(DATA_DIR, 'stall_state.json')
 STATE_LOCK = threading.Lock()
 
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(EXPORTS_DIR, exist_ok=True)
+if not os.environ.get('VERCEL'):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
 
 def load_data():
     if os.path.exists(STORE_FILE):
@@ -44,17 +45,24 @@ def save_data(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 DIST_DIR = os.path.join(BASE_DIR, 'dist')
+PUBLIC_DIR = os.path.join(BASE_DIR, 'public')
+
+def _screen_dir():
+    for folder in (PUBLIC_DIR, DIST_DIR, BASE_DIR):
+        if os.path.exists(os.path.join(folder, 'index.html')):
+            return folder
+    return BASE_DIR
 
 @app.route('/')
 def index():
-    if os.path.exists(os.path.join(DIST_DIR, 'index.html')):
-        return send_from_directory(DIST_DIR, 'index.html')
-    return send_file(os.path.join(BASE_DIR, 'index.html'))
+    return send_from_directory(_screen_dir(), 'index.html')
 
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
-    if os.path.exists(os.path.join(DIST_DIR, 'assets', filename)):
-        return send_from_directory(os.path.join(DIST_DIR, 'assets'), filename)
+    for folder in (PUBLIC_DIR, DIST_DIR, BASE_DIR):
+        asset = os.path.join(folder, 'assets', filename)
+        if os.path.exists(asset):
+            return send_from_directory(os.path.join(folder, 'assets'), filename)
     return send_from_directory(os.path.join(BASE_DIR, 'assets'), filename)
 
 @app.route('/static/<path:filename>')
@@ -249,4 +257,68 @@ def stall_state():
     }
     try:
         with STATE_LOCK:
-            curren
+            current = _read_stall_state()
+            current_revision = int(current.get('revision') or 0)
+            if current_revision and base_revision != current_revision:
+                return jsonify(current), 409
+            _write_stall_state(kept)
+    except Exception:
+        return jsonify({'error': 'Could not save the shared stall. Try again.'}), 500
+    return jsonify({'success': True, 'revision': kept['revision']})
+
+
+def _export_filename(event_name):
+    date_tag = datetime.today().strftime('%Y_%m_%d')
+    safe_event = re.sub(r'[^A-Za-z0-9]+', '_', event_name or '').strip('_')[:60]
+    if safe_event:
+        return f'Svvad_Stall_Daily_Billing_{safe_event}_{date_tag}.xlsx'
+    return f'Svvad_Stall_Daily_Billing_{date_tag}.xlsx'
+
+
+@app.route('/api/export-excel', methods=['GET', 'POST'])
+def export_excel():
+    event_name = ''
+    if request.method == 'POST':
+        body = request.get_json(silent=True) or {}
+        bills = body.get('entries') or body.get('bills') or []
+        event_name = body.get('event_name') or ''
+    else:
+        data = load_data()
+        filter_date = request.args.get('date')
+        bills = data.get('bills', [])
+        if filter_date:
+            bills = [b for b in bills if b.get('billing_date') == filter_date]
+
+    if not isinstance(bills, list):
+        return jsonify({'error': 'Entries must be a list'}), 400
+    if len(bills) > 5000:
+        return jsonify({'error': 'Too many billing rows to export'}), 400
+
+    output_filename = _export_filename(event_name)
+    export_dir = '/tmp' if os.environ.get('VERCEL') else EXPORTS_DIR
+    output_path = os.path.join(export_dir, output_filename)
+    try:
+        with STATE_LOCK:
+            generate_eod_excel(bills, output_path, TEMPLATE_PATH)
+    except PermissionError:
+        output_filename = output_filename.replace('.xlsx', f"_{datetime.now().strftime('%H%M%S')}.xlsx")
+        output_path = os.path.join(export_dir, output_filename)
+        generate_eod_excel(bills, output_path, TEMPLATE_PATH)
+    except Exception as exc:
+        return jsonify({'error': f'Could not create the billing Excel file. {exc}'}), 500
+
+    response = send_file(
+        output_path,
+        as_attachment=True,
+        download_name=output_filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['X-Export-Filename'] = output_filename
+    return response
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Svvad stall app: http://localhost:{port}")
+    print("Download Billing Excel fills the official Billing_Format sheet.")
+    app.run(host='0.0.0.0', port=port, debug=False)
