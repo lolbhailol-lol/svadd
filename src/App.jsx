@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Minus, Plus, Search, Trash2, Package, CirclePlus, ListChecks } from 'lucide-react';
 import { defaultProducts, eventNames } from './data/products';
 
+function productLabel(name) {
+  return String(name || '').replace(/^Svvad Pro\s+/i, '');
+}
+
 const STORAGE_KEY = 'svvad_pro_event_stock_v1';
 const ENTRIES_KEY = 'svvad_pro_event_entries_v1';
 const PERSON_KEY = 'svvad_pro_sale_person_v1';
@@ -39,6 +43,7 @@ export default function App() {
   const savedTimer = useRef(null);
   const saveLock = useRef(false);
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [productQuery, setProductQuery] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [entryType, setEntryType] = useState('without');
   const [discount, setDiscount] = useState(10);
@@ -170,6 +175,11 @@ export default function App() {
   };
 
   const chosenProduct = defaultProducts.find((product) => product.name === selectedProduct);
+  const productChoices = useMemo(() => {
+    const query = productQuery.trim().toLowerCase();
+    if (!query) return defaultProducts;
+    return defaultProducts.filter((product) => product.name.toLowerCase().includes(query) || productLabel(product.name).toLowerCase().includes(query));
+  }, [productQuery]);
   const safeQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
   const activeDiscount = entryType === 'with' ? Math.min(99, Math.max(1, Number(discount) || 1)) : 0;
   const selectedStock = chosenProduct ? Number(eventStock[chosenProduct.id] || 0) : 0;
@@ -216,6 +226,7 @@ export default function App() {
     localStorage.setItem(ENTRIES_KEY, JSON.stringify(updatedEntries));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStock));
     setSelectedProduct('');
+    setProductQuery('');
     setQuantity(1);
     setNotice('Entry saved and stock reduced');
     window.clearTimeout(savedTimer.current);
@@ -424,28 +435,48 @@ export default function App() {
                 </div>
               </div>
 
-              <label className="field">
+              <div className="field">
                 <span>Product</span>
-                <input
-                  className="desktop-product-input"
-                  list="product-options"
-                  value={selectedProduct}
-                  onChange={(event) => setSelectedProduct(event.target.value)}
-                  placeholder="Type or select a product"
-                />
-                <datalist id="product-options">
-                  {defaultProducts.map((product) => <option key={product.id} value={product.name} />)}
-                </datalist>
-                <select className="mobile-product-select" value={selectedProduct} onChange={(event) => setSelectedProduct(event.target.value)}>
-                  <option value="">Choose a product</option>
-                  {defaultProducts.map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
-                </select>
+                <div className="product-picker">
+                  <input
+                    value={productQuery}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setProductQuery(value);
+                      const query = value.trim().toLowerCase();
+                      const match = defaultProducts.find((product) => product.name.toLowerCase() === query || productLabel(product.name).toLowerCase() === query);
+                      setSelectedProduct(match ? match.name : '');
+                    }}
+                    placeholder="Search puffs, nachos, khakhra..."
+                    aria-label="Search product"
+                  />
+                  <div className="product-choices" role="listbox" aria-label="Products">
+                    {productChoices.length === 0 ? (
+                      <p className="picker-more">No product with that name.</p>
+                    ) : productChoices.map((product) => (
+                      <button
+                        type="button"
+                        key={product.id}
+                        role="option"
+                        aria-selected={selectedProduct === product.name}
+                        className={selectedProduct === product.name ? 'active' : ''}
+                        onClick={() => {
+                          setSelectedProduct(product.name);
+                          setProductQuery(productLabel(product.name));
+                        }}
+                      >
+                        <strong>{productLabel(product.name)}</strong>
+                        <em>{money(product.rate)}</em>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {chosenProduct && (
                   <small className={hasEnoughStock ? 'hint' : 'hint warn'}>
                     {selectedStock} in stock
                   </small>
                 )}
-              </label>
+              </div>
 
               <div className="entry-types" role="group" aria-label="Entry type">
                 <button type="button" aria-pressed={entryType === 'without'} className={`type-normal ${entryType === 'without' ? 'active' : ''}`} onClick={() => setEntryType('without')}>Normal sale</button>
