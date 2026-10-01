@@ -3,10 +3,12 @@
 :root {
   color: #1c2820;
   background: #e7f0ea;
+  color-scheme: light;
   font-family: "Segoe UI", Arial, sans-serif;
   font-synthesis: none;
 }
 
+html, body, #root { background: #e7f0ea; }
 body { margin: 0; min-width: 320px; }
 button, input, select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }

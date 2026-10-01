@@ -58,12 +58,14 @@ export default function App() {
   const savePendingRef = useRef(false);
 
   const eventStock = stockByEvent[eventName] || {};
-  const entries = entriesByEvent[eventName] || [];
+  const entries = Array.isArray(entriesByEvent[eventName]) ? entriesByEvent[eventName] : [];
   const salePerson = peopleByEvent[eventName] || '';
 
   const applySharedState = (data) => {
     const stock = data.stockByEvent && typeof data.stockByEvent === 'object' ? data.stockByEvent : {};
-    const sharedEntries = data.entriesByEvent && typeof data.entriesByEvent === 'object' ? data.entriesByEvent : {};
+    const sharedEntries = data.entriesByEvent && typeof data.entriesByEvent === 'object'
+      ? Object.fromEntries(Object.entries(data.entriesByEvent).map(([event, lines]) => [event, Array.isArray(lines) ? lines : []]))
+      : {};
     const people = data.peopleByEvent && typeof data.peopleByEvent === 'object' ? data.peopleByEvent : {};
     skipSaveRef.current = true;
     revisionRef.current = Number(data.revision) || 0;
