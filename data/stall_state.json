@@ -1,0 +1,45 @@
+{
+  "stockByEvent": {
+    "SVVAD PRO Mumbai Event": {
+      "sv-05": 1,
+      "sv-06": 0,
+      "sv-14": 0,
+      "sv-15": 9
+    },
+    "SVVAD PRO PCMC SHOPPING FESTIVAL": {
+      "sv-01": 13,
+      "sv-02": 1
+    },
+    "SVVAD PRO PUNE COEP": {
+      "sv-01": 1
+    }
+  },
+  "entriesByEvent": {
+    "SVVAD PRO Mumbai Event": [
+      {
+        "date": "01/10/2026",
+        "discount": 0,
+        "id": "1790796375675",
+        "paymentMode": "UPI",
+        "productId": "sv-06",
+        "productName": "Svvad Pro Pea Protein Puffs (Smoky Barbeque 80g)",
+        "quantity": 1,
+        "rate": 99,
+        "stockDeducted": true,
+        "type": "without"
+      },
+      {
+        "date": "01/10/2026",
+        "discount": 15,
+        "id": "1790796068371",
+        "paymentMode": "Cash",
+        "productId": "sv-07",
+        "productName": "Svvad Pro Plant Protein Granola (Almond Cranberry 250g)",
+        "quantity": 1,
+        "rate": 299,
+        "type": "with"
+      }
+    ]
+  },
+  "peopleByEvent": {}
+}
