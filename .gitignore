@@ -1,3 +1,15 @@
 .vercel
 .env*.local
 data/live_backup_*.json
+data/stall_state.json
+data/store.json
+exports/
+node_modules/
+dist/
+public/
+__pycache__/
+*.log
+edge_dump.html
+onedrive_landing.html
+resp_out.html
+test_output.xlsx
