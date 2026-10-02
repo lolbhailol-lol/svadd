@@ -152,14 +152,11 @@ export default function App() {
     const sharedEntries = data.entriesByEvent && typeof data.entriesByEvent === 'object'
       ? Object.fromEntries(Object.entries(data.entriesByEvent).map(([event, lines]) => [event, Array.isArray(lines) ? lines : []]))
       : {};
-    const people = data.peopleByEvent && typeof data.peopleByEvent === 'object' ? data.peopleByEvent : {};
     revisionRef.current = Number(data.revision) || 0;
     setStockByEvent(stock);
     setEntriesByEvent(sharedEntries);
-    setPeopleByEvent(people);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stock));
     localStorage.setItem(ENTRIES_KEY, JSON.stringify(sharedEntries));
-    localStorage.setItem(PERSON_KEY, JSON.stringify(people));
   };
 
   useEffect(() => {
@@ -276,7 +273,6 @@ export default function App() {
     const updated = { ...peopleByEvent, [eventName]: value };
     setPeopleByEvent(updated);
     localStorage.setItem(PERSON_KEY, JSON.stringify(updated));
-    queueOps([{ op: 'person', event: eventName, value }]);
   };
   const products = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -897,6 +893,7 @@ export default function App() {
                     <span className="sale-time">
                       {sale.stamp > 1e12 ? new Date(sale.stamp).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : sale.date}
                       {dayMode === 'all' && sale.stamp > 1e12 ? ` · ${sale.date}` : ''}
+                      {sale.lines[0]?.salesperson && <small className="sale-person">{sale.lines[0].salesperson}</small>}
                     </span>
                     <em className={`sale-mode mode-${String(sale.mode).toLowerCase()}`}>{sale.mode === 'SAMPLING' ? 'Free' : sale.mode}</em>
                     <b>{money(sale.total)}</b>

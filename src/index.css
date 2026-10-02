@@ -274,6 +274,7 @@ h1, h2, h3, p { margin: 0; }
 .sale-row.sale-sampling { border-left-color: #a78bfa; }
 .sale-top { display: flex; align-items: center; gap: 8px; }
 .sale-time { font-size: 12px; font-weight: 700; color: #6d776f; margin-right: auto; }
+.sale-person { display: block; margin-top: 1px; font-size: 11px; font-weight: 600; color: #8a948c; }
 .sale-mode { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eef1ee; color: #415047; }
 .sale-mode.mode-upi { background: #e5f7ec; color: #14663a; }
 .sale-mode.mode-cash { background: #e7f1ff; color: #1d4f91; }
