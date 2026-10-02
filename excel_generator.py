@@ -121,7 +121,7 @@ def _write_cached_results(path, sheet_part, results):
         text = str(int(number)) if number == int(number) else repr(number)
         return f'<c r="{coordinate}"{match.group(2)}>{match.group(3)}<v>{text}</v></c>'
 
-    xml = re.sub(r'<c r="([A-Z]+\d+)"([^>]*)>(<f>.*?</f>)(?:<v>[^<]*</v>|<v/>)?</c>', fill, xml)
+    xml = re.sub(r'<c r="([A-Z]+\d+)"([^>]*)>(<f>.*?</f>)(?:<v>[^<]*</v>|<v\s*/>)?</c>', fill, xml)
     parts[sheet_part] = xml.encode('utf-8')
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as target:
         for info in infos:
