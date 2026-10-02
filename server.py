@@ -55,7 +55,9 @@ def _screen_dir():
 
 @app.route('/')
 def index():
-    return send_from_directory(_screen_dir(), 'index.html')
+    response = send_from_directory(_screen_dir(), 'index.html', etag=False, conditional=False, last_modified=None, max_age=0)
+    response.headers['Cache-Control'] = 'no-store, max-age=0'
+    return response
 
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
@@ -175,8 +177,8 @@ def _read_blob_state(token):
     store_id = _blob_store_id(token)
     if not store_id:
         raise RuntimeError('Shared storage token is invalid')
-    url = f'https://{store_id}.private.blob.vercel-storage.com/stall-state.json?cache=0'
-    req = urllib.request.Request(url, headers={'authorization': f'Bearer {token}'})
+    url = f'https://{store_id}.private.blob.vercel-storage.com/stall-state.json?cache=0&t={time.time_ns()}'
+    req = urllib.request.Request(url, headers={'authorization': f'Bearer {token}', 'cache-control': 'no-cache'})
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             data = json.loads(response.read().decode('utf-8'))
@@ -265,6 +267,64 @@ def stall_state():
     except Exception:
         return jsonify({'error': 'Could not save the shared stall. Try again.'}), 500
     return jsonify({'success': True, 'revision': kept['revision']})
+
+
+def _shift_stock(stock, entry, sign):
+    product_id = str(entry.get('productId') or '')
+    if product_id:
+        quantity = int(entry.get('quantity') or 0)
+        stock[product_id] = max(0, int(stock.get(product_id) or 0) + sign * quantity)
+
+
+def _apply_stall_op(state, op):
+    event = str(op.get('event') or '')
+    if not event:
+        return
+    stock = state.setdefault('stockByEvent', {}).setdefault(event, {})
+    entries = state.setdefault('entriesByEvent', {})
+    kind = op.get('op')
+    if kind == 'stockDelta':
+        product_id = str(op.get('productId') or '')
+        if product_id:
+            stock[product_id] = max(0, int(stock.get(product_id) or 0) + int(op.get('delta') or 0))
+    elif kind == 'addEntries':
+        new_entries = [entry for entry in (op.get('entries') or []) if isinstance(entry, dict)]
+        existing = entries.get(event) if isinstance(entries.get(event), list) else []
+        known = {entry.get('id') for entry in existing}
+        added = [entry for entry in new_entries if entry.get('id') not in known]
+        entries[event] = added + existing
+        if op.get('deductStock'):
+            for entry in added:
+                _shift_stock(stock, entry, -1)
+    elif kind == 'removeEntries':
+        ids = set(op.get('ids') or [])
+        existing = entries.get(event) if isinstance(entries.get(event), list) else []
+        entries[event] = [entry for entry in existing if entry.get('id') not in ids]
+        if op.get('restoreStock'):
+            for entry in existing:
+                if entry.get('id') in ids and entry.get('stockDeducted'):
+                    _shift_stock(stock, entry, 1)
+    elif kind == 'person':
+        state.setdefault('peopleByEvent', {})[event] = str(op.get('value') or '')
+
+
+@app.route('/api/stall-ops', methods=['POST'])
+def stall_ops():
+    body = request.get_json(silent=True)
+    ops = body.get('ops') if isinstance(body, dict) else None
+    if not isinstance(ops, list):
+        return jsonify({'error': 'Invalid stall change'}), 400
+    try:
+        with STATE_LOCK:
+            state = _read_stall_state()
+            for op in ops:
+                if isinstance(op, dict):
+                    _apply_stall_op(state, op)
+            state['revision'] = max(int(time.time() * 1000), int(state.get('revision') or 0) + 1)
+            _write_stall_state(state)
+    except Exception:
+        return jsonify({'error': 'Could not save the shared stall. Try again.'}), 500
+    return jsonify(state)
 
 
 def _export_filename(event_name):

@@ -1,25 +1,106 @@
 export const eventNames = [
-  'SVVAD PRO Mumbai Event',
   'SVVAD PRO PUNE COEP',
-  'SVVAD PRO PCMC SHOPPING FESTIVAL'
+  'SVVAD PRO PUNE UTSAV',
+  'SVVAD PRO Mumbai Event'
 ];
 
-export const defaultProducts = [
-  { id: 'sv-01', name: 'Svvad Pro High Protein Roasted Pea Pops (Tangy Tomato 100g)', rate: 120 },
-  { id: 'sv-02', name: 'Svvad Pro High Protein Roasted Pea Pops (Cheese & Herbs 100g)', rate: 120 },
-  { id: 'sv-03', name: 'Svvad Pro Pulse Protein Khakhra (Methi Crisps 150g)', rate: 140 },
-  { id: 'sv-04', name: 'Svvad Pro Pulse Protein Khakhra (Jeera Masala 150g)', rate: 140 },
-  { id: 'sv-05', name: 'Svvad Pro Pea Protein Puffs (Cream & Onion 80g)', rate: 99 },
-  { id: 'sv-06', name: 'Svvad Pro Pea Protein Puffs (Smoky Barbeque 80g)', rate: 99 },
-  { id: 'sv-07', name: 'Svvad Pro Plant Protein Granola (Almond Cranberry 250g)', rate: 299 },
-  { id: 'sv-08', name: 'Svvad Pro Clean Pulse Protein Bar (Dark Chocolate 50g)', rate: 90 },
-  { id: 'sv-09', name: 'Svvad Pro Clean Pulse Protein Bar (Almond Hazelnut 50g)', rate: 95 },
-  { id: 'sv-10', name: 'Svvad Pro Pea Protein Shake Premix (Alphonso Mango 200g)', rate: 349 },
-  { id: 'sv-11', name: 'Svvad Pro Pea Protein Shake Premix (Swiss Chocolate 200g)', rate: 349 },
-  { id: 'sv-12', name: 'Svvad Pro Roasted Makhana (Peri Peri Protein 70g)', rate: 130 },
-  { id: 'sv-13', name: 'Svvad Pro Wellness Gift Hamper (Assorted Pack)', rate: 899 },
-  { id: 'sv-14', name: '85gms Choco cookies', rate: 85, note: 'No carton' },
-  { id: 'sv-15', name: '85gms Butter Sorghum', rate: 85, note: 'No carton' },
-  { id: 'sv-16', name: 'NACHOS TANGY TOMATO _ 28gms', rate: 20 },
-  { id: 'sv-17', name: 'Nachos BBQ SMOKE _ 28Gms', rate: 20 }
+const catalog = {
+  'atta-multigrain': { name: 'High Protein Multigrain Atta 1kg', category: 'Atta' },
+  'atta-protein': { name: 'High Protein Atta 1kg', category: 'Atta' },
+  'cookie-butter-sorghum': { name: 'Protein Cookies - Butter Sorghum 150g', category: 'Cookies', perBox: 48 },
+  'cookie-honey-oats': { name: 'Protein Cookies - Honey & Oats 150g', category: 'Cookies', perBox: 48 },
+  'cookie-chocos': { name: 'Protein Cookies - Chocos 150g', category: 'Cookies', perBox: 48 },
+  'cookie-chocos-85': { name: 'Protein Cookies - Chocos 85g', category: 'Cookies', perBox: 96 },
+  'cookie-butter-sorghum-85': { name: 'Protein Cookies - Butter Sorghum 85g', category: 'Cookies', perBox: 96 },
+  'rusk-wheat': { name: 'High Protein Whole Wheat Rusk 150g', category: 'Rusk', perBox: 40 },
+  'puffs-bbq': { name: 'Protein Puffs - Barbeque Smoke 40g', category: 'Puffs', perBox: 70 },
+  'puffs-cream-onion': { name: 'Protein Puffs - Cream & Onion 40g', category: 'Puffs', perBox: 70 },
+  'puffs-tangy-tomato': { name: 'Protein Puffs - Tangy Tomato 40g', category: 'Puffs', perBox: 70 },
+  'nachos-tangy-tomato': { name: 'Protein Nachos - Tangy Tomato 28g', category: 'Nachos', perBox: 70 },
+  'nachos-bbq': { name: 'Protein Nachos - Barbeque Smoke 28g', category: 'Nachos', perBox: 70 },
+  'honey-loops': { name: 'High Protein Honey Loops 350g', category: 'Honey Loops', perBox: 32 },
+  chocos: { name: 'High Protein Chocos 350g', category: 'Chocos', perBox: 32 },
+  'muesli-fruit-nuts': { name: 'High Protein Fruits & Nuts Muesli 220g', category: 'Muesli', perBox: 32 },
+  'muesli-choco': { name: 'High Protein Choco Muesli 220g', category: 'Muesli', perBox: 32 },
+  'pancake-vanilla': { name: 'High Protein Vanilla Pancake Premix 250g', category: 'Pancake', perBox: 45 },
+  'pancake-choco': { name: 'High Protein Choco Pancake Premix 250g', category: 'Pancake', perBox: 45 }
+};
+
+const PUFFS_OFFER = { kind: 'combo', group: 'puffs', qty: 3, price: 100, label: '3 for ₹100' };
+const BOGO = { kind: 'bogo', label: 'Buy 1 Get 1' };
+const price = (amount, label) => ({ kind: 'price', price: amount, label });
+
+const puffs = [
+  ['puffs-bbq', 40, PUFFS_OFFER],
+  ['puffs-cream-onion', 40, PUFFS_OFFER],
+  ['puffs-tangy-tomato', 40, PUFFS_OFFER]
 ];
+
+const eventLists = {
+  'SVVAD PRO PUNE COEP': [
+    ['cookie-butter-sorghum', 140, price(130, '10% off')],
+    ['cookie-honey-oats', 140, price(130, '10% off')],
+    ['cookie-chocos', 150, price(135, '10% off')],
+    ['cookie-chocos-85', 85, null],
+    ['cookie-butter-sorghum-85', 85, null],
+    ['rusk-wheat', 130, BOGO],
+    ...puffs,
+    ['nachos-tangy-tomato', 20, null],
+    ['nachos-bbq', 20, null],
+    ['honey-loops', 260, price(210, '20% off')],
+    ['chocos', 260, price(210, '20% off')],
+    ['muesli-fruit-nuts', 230, price(185, '20% off')],
+    ['muesli-choco', 250, price(200, '20% off')],
+    ['pancake-vanilla', 200, price(160, '20% off')],
+    ['pancake-choco', 200, price(160, '20% off')]
+  ],
+  'SVVAD PRO PUNE UTSAV': [
+    ['atta-multigrain', 210, price(170, '20% off')],
+    ['atta-protein', 190, price(155, '20% off')],
+    ['cookie-butter-sorghum', 140, price(130, '10% off')],
+    ['cookie-honey-oats', 140, price(130, '10% off')],
+    ['cookie-chocos', 150, price(135, '10% off')],
+    ['rusk-wheat', 130, BOGO],
+    ...puffs,
+    ['nachos-tangy-tomato', 20, null],
+    ['nachos-bbq', 20, null],
+    ['honey-loops', 260, price(235, '10% off')],
+    ['chocos', 260, price(235, '10% off')],
+    ['muesli-fruit-nuts', 230, price(210, '10% off')],
+    ['muesli-choco', 250, price(225, '10% off')],
+    ['pancake-vanilla', 200, price(160, '20% off')],
+    ['pancake-choco', 200, price(160, '20% off')]
+  ],
+  'SVVAD PRO Mumbai Event': [
+    ['atta-multigrain', 210, price(190, '10% off')],
+    ['atta-protein', 190, price(170, '10% off')],
+    ['cookie-butter-sorghum', 140, price(130, '10% off')],
+    ['cookie-honey-oats', 140, price(130, '10% off')],
+    ['cookie-chocos', 150, price(135, '10% off')],
+    ['rusk-wheat', 130, BOGO],
+    ...puffs,
+    ['honey-loops', 260, price(235, '10% off')],
+    ['chocos', 260, price(235, '10% off')],
+    ['muesli-fruit-nuts', 230, price(210, '10% off')],
+    ['muesli-choco', 250, price(225, '10% off')],
+    ['pancake-vanilla', 200, price(180, '10% off')],
+    ['pancake-choco', 200, price(180, '10% off')]
+  ]
+};
+
+export function productsForEvent(eventName) {
+  const list = eventLists[eventName] || eventLists[eventNames[0]];
+  return list.map(([id, rate, offer]) => ({ id, ...catalog[id], rate, offer }));
+}
+
+export function offerDiscountPercent(product, quantity) {
+  const offer = product?.offer;
+  if (!offer || !product.rate) return 0;
+  if (offer.kind === 'price') return ((product.rate - offer.price) / product.rate) * 100;
+  if (offer.kind === 'bogo') {
+    const qty = Math.max(1, quantity);
+    return (Math.floor(qty / 2) / qty) * 100;
+  }
+  if (offer.kind === 'combo') return (1 - offer.price / (offer.qty * product.rate)) * 100;
+  return 0;
+}

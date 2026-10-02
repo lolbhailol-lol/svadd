@@ -1,9 +1,11 @@
 import os
+import re
+import zipfile
 from copy import copy
 from datetime import datetime
 
 import openpyxl
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import column_index_from_string, get_column_letter
 
 # Official template layout. Row 156 totals rows 3-152. Row 153 has formulas but is outside that total.
 DATA_START = 3
@@ -55,9 +57,75 @@ def generate_eod_excel(entries, output_path, template_path=None):
         ws.cell(row, 9).value = str(entry.get('salesperson', entry.get('sale_person', '')) or '')
         ws.cell(row, 10).value = str(entry.get('payment_mode', entry.get('paymentMode', '')) or '')
 
+    ws.freeze_panes = 'A3'
+    ws.sheet_view.selection[-1].activeCell = 'A3'
+    ws.sheet_view.selection[-1].sqref = 'A3'
+    wb.active = wb.sheetnames.index(SHEET_NAME)
+
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    cached = _formula_results(ws)
+    sheet_index = wb.sheetnames.index(SHEET_NAME) + 1
     wb.save(output_path)
+    _write_cached_results(output_path, f'xl/worksheets/sheet{sheet_index}.xml', cached)
     return output_path
+
+
+_REF = re.compile(r'\$?([A-Z]{1,3})\$?(\d+)')
+_SUM = re.compile(r'SUM\(\$?([A-Z]{1,3})\$?(\d+):\$?([A-Z]{1,3})\$?(\d+)\)')
+
+
+def _formula_results(ws):
+    """Phone viewers show formula cells blank unless the file also stores their results."""
+    results = {}
+
+    def value(column, row):
+        coordinate = f'{column}{row}'
+        if coordinate in results:
+            return results[coordinate]
+        raw = ws[coordinate].value
+        if isinstance(raw, str) and raw.startswith('='):
+            results[coordinate] = evaluate(raw[1:])
+            return results[coordinate]
+        return float(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else 0.0
+
+    def total(match):
+        first, start, last, end = match.group(1), int(match.group(2)), match.group(3), int(match.group(4))
+        columns = range(column_index_from_string(first), column_index_from_string(last) + 1)
+        return repr(sum(value(get_column_letter(c), r) for c in columns for r in range(start, end + 1)))
+
+    def evaluate(expression):
+        expression = _SUM.sub(total, expression)
+        expression = _REF.sub(lambda m: repr(value(m.group(1), int(m.group(2)))), expression)
+        if not re.fullmatch(r'[\d\s.+\-*/()e]*', expression):
+            return None
+        return eval(expression, {'__builtins__': {}}, {})
+
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.startswith('='):
+                value(cell.column_letter, cell.row)
+    return {coordinate: result for coordinate, result in results.items() if result is not None}
+
+
+def _write_cached_results(path, sheet_part, results):
+    with zipfile.ZipFile(path) as source:
+        parts = {name: source.read(name) for name in source.namelist()}
+        infos = source.infolist()
+    xml = parts[sheet_part].decode('utf-8')
+
+    def fill(match):
+        coordinate = match.group(1)
+        if coordinate not in results:
+            return match.group(0)
+        number = round(results[coordinate], 10)
+        text = str(int(number)) if number == int(number) else repr(number)
+        return f'<c r="{coordinate}"{match.group(2)}>{match.group(3)}<v>{text}</v></c>'
+
+    xml = re.sub(r'<c r="([A-Z]+\d+)"([^>]*)>(<f>.*?</f>)(?:<v>[^<]*</v>|<v/>)?</c>', fill, xml)
+    parts[sheet_part] = xml.encode('utf-8')
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as target:
+        for info in infos:
+            target.writestr(info, parts[info.filename])
 
 
 def _find_total_row(ws):
