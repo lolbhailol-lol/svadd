@@ -1,2 +1,3 @@
 .vercel
 .env*.local
+data/live_backup_*.json

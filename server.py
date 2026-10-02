@@ -1,5 +1,6 @@
 import os
 import json
+import random
 import re
 import threading
 import time
@@ -173,26 +174,33 @@ def _blob_store_id(token):
     return store_id if separator else ''
 
 
+BLOB_STATE_PATH = os.environ.get('BLOB_STATE_PATH', 'stall-state.json')
+
+
+class StateConflict(Exception):
+    pass
+
+
 def _read_blob_state(token):
     store_id = _blob_store_id(token)
     if not store_id:
         raise RuntimeError('Shared storage token is invalid')
-    url = f'https://{store_id}.private.blob.vercel-storage.com/stall-state.json?cache=0&t={time.time_ns()}'
+    url = f'https://{store_id}.private.blob.vercel-storage.com/{BLOB_STATE_PATH}?cache=0&t={time.time_ns()}'
     req = urllib.request.Request(url, headers={'authorization': f'Bearer {token}', 'cache-control': 'no-cache'})
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
+            etag = response.headers.get('etag')
             data = json.loads(response.read().decode('utf-8'))
-        return data if isinstance(data, dict) else {}
+        return (data if isinstance(data, dict) else {}), etag
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            return {}
+            return {}, None
         raise
 
 
-def _write_blob_state(token, payload):
+def _write_blob_state(token, payload, etag=None):
     raw = json.dumps(payload).encode('utf-8')
-    url = 'https://vercel.com/api/blob/?pathname=stall-state.json'
-    req = urllib.request.Request(url, data=raw, method='PUT', headers={
+    headers = {
         'authorization': f'Bearer {token}',
         'x-api-version': '12',
         'x-vercel-blob-access': 'private',
@@ -200,9 +208,19 @@ def _write_blob_state(token, payload):
         'x-allow-overwrite': '1',
         'x-content-type': 'application/json',
         'x-content-length': str(len(raw)),
-    })
-    with urllib.request.urlopen(req, timeout=15) as response:
-        response.read()
+    }
+    if etag:
+        headers['x-if-match'] = etag
+    url = f'https://vercel.com/api/blob/?pathname={BLOB_STATE_PATH}'
+    req = urllib.request.Request(url, data=raw, method='PUT', headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode('utf-8', 'replace')
+        if exc.code == 412 or 'precondition_failed' in body:
+            raise StateConflict() from exc
+        raise
 
 
 def _read_file_state():
@@ -221,17 +239,22 @@ def _write_file_state(payload):
         json.dump(payload, handle, indent=2, ensure_ascii=False)
 
 
-def _read_stall_state():
+def _read_stall_state_versioned():
     token = _blob_token()
     if token:
         return _read_blob_state(token)
-    return _read_file_state()
+    return _read_file_state(), None
 
 
-def _write_stall_state(payload):
+def _read_stall_state():
+    return _read_stall_state_versioned()[0]
+
+
+def _write_stall_state(payload, etag=None):
+    """With an etag, the blob write fails with StateConflict if another server instance saved first."""
     token = _blob_token()
     if token:
-        _write_blob_state(token, payload)
+        _write_blob_state(token, payload, etag)
         return
     _write_file_state(payload)
 
@@ -316,12 +339,19 @@ def stall_ops():
         return jsonify({'error': 'Invalid stall change'}), 400
     try:
         with STATE_LOCK:
-            state = _read_stall_state()
-            for op in ops:
-                if isinstance(op, dict):
-                    _apply_stall_op(state, op)
-            state['revision'] = max(int(time.time() * 1000), int(state.get('revision') or 0) + 1)
-            _write_stall_state(state)
+            for attempt in range(10):
+                state, etag = _read_stall_state_versioned()
+                for op in ops:
+                    if isinstance(op, dict):
+                        _apply_stall_op(state, op)
+                state['revision'] = max(int(time.time() * 1000), int(state.get('revision') or 0) + 1)
+                try:
+                    _write_stall_state(state, etag)
+                    break
+                except StateConflict:
+                    time.sleep(random.uniform(0.05, 0.25) * (attempt + 1))
+            else:
+                return jsonify({'error': 'The stall is busy. Retrying.'}), 503
     except Exception:
         return jsonify({'error': 'Could not save the shared stall. Try again.'}), 500
     return jsonify(state)
