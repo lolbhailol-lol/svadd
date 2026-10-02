@@ -139,6 +139,8 @@ export default function App() {
   const opsQueueRef = useRef(loadPendingOps());
   const syncingRef = useRef(false);
   const flushTimerRef = useRef(null);
+  const failStreakRef = useRef(0);
+  const [unsynced, setUnsynced] = useState(() => loadPendingOps().length);
 
   const eventProducts = useMemo(() => productsForEvent(eventName), [eventName]);
   const eventStock = stockByEvent[eventName] || {};
@@ -209,22 +211,42 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ops: sending })
       });
-      if (!response.ok) throw new Error('save failed');
+      if (!response.ok) {
+        let message = '';
+        try {
+          message = (await response.json()).error || '';
+        } catch {
+          // Not JSON; keep the default message.
+        }
+        throw new Error(message);
+      }
       const data = await response.json();
       saved = true;
       savePendingOps(opsQueueRef.current);
+      setUnsynced(opsQueueRef.current.length);
+      if (failStreakRef.current) {
+        failStreakRef.current = 0;
+        setNotice('All sales synced');
+        window.clearTimeout(savedTimer.current);
+        savedTimer.current = window.setTimeout(() => setNotice(''), 2200);
+      }
       if (opsQueueRef.current.length) {
         revisionRef.current = Math.max(revisionRef.current, Number(data.revision) || 0);
       } else {
         applySharedState(data);
       }
-    } catch {
+    } catch (error) {
       opsQueueRef.current.unshift(...sending);
-      setNotice('Not synced yet. It will retry when the internet is back.');
-      window.clearTimeout(savedTimer.current);
-      savedTimer.current = window.setTimeout(() => setNotice(''), 3200);
+      setUnsynced(opsQueueRef.current.length);
+      failStreakRef.current += 1;
+      if (failStreakRef.current === 1) {
+        const serverMessage = error instanceof TypeError ? '' : error?.message;
+        setNotice(serverMessage || 'No internet. Sales are saved on this phone and will sync.');
+        window.clearTimeout(savedTimer.current);
+        savedTimer.current = window.setTimeout(() => setNotice(''), 4000);
+      }
       window.clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = window.setTimeout(flushOps, 3000);
+      flushTimerRef.current = window.setTimeout(flushOps, Math.min(20000, 3000 * failStreakRef.current));
     } finally {
       syncingRef.current = false;
       if (saved && opsQueueRef.current.length) {
@@ -245,6 +267,7 @@ export default function App() {
   const queueOps = (ops) => {
     opsQueueRef.current.push(...ops);
     savePendingOps(opsQueueRef.current);
+    setUnsynced(opsQueueRef.current.length);
     window.clearTimeout(flushTimerRef.current);
     flushTimerRef.current = window.setTimeout(flushOps, 250);
   };
@@ -527,7 +550,7 @@ export default function App() {
     <div className={`app-shell ${activeView === 'entry' && billPacks > 0 ? 'has-bill' : ''}`}>
       <header className="topbar">
         <div className="brand">
-          <span>SVVAD PRO</span>
+          <span>SVVAD PRO{unsynced > 0 && <em className="sync-pending">{unsynced} not synced</em>}</span>
           <h1>Stall counter</h1>
         </div>
         <button className="excel-button" onClick={exportExcel} disabled={exporting}>

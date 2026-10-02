@@ -163,7 +163,14 @@ def reset_day():
     return jsonify({'success': True, 'archive_saved': archive_file})
 
 def _blob_token():
-    return os.environ.get('BLOB_READ_WRITE_TOKEN', '').strip()
+    token = os.environ.get('BLOB_READ_WRITE_TOKEN', '').strip()
+    if token:
+        return token
+    # A Blob store connected with a custom env prefix names the variable <PREFIX>_READ_WRITE_TOKEN.
+    for name, value in os.environ.items():
+        if name.endswith('READ_WRITE_TOKEN') and value.strip().startswith('vercel_blob_rw_'):
+            return value.strip()
+    return ''
 
 
 def _blob_store_id(token):
@@ -174,6 +181,41 @@ def _blob_store_id(token):
     return store_id if separator else ''
 
 
+def _oidc_store_id():
+    store_id = os.environ.get('BLOB_STORE_ID', '').strip()
+    if not store_id:
+        for name, value in os.environ.items():
+            if name.endswith('_STORE_ID') and value.strip().startswith('store_'):
+                store_id = value.strip()
+                break
+    return store_id[len('store_'):] if store_id.startswith('store_') else store_id
+
+
+def _blob_auth():
+    """(bearer, store_id) for the Blob store, or None when no store is connected."""
+    token = _blob_token()
+    if token:
+        return token, _blob_store_id(token)
+    store_id = _oidc_store_id()
+    if store_id:
+        oidc = ''
+        try:
+            oidc = request.headers.get('x-vercel-oidc-token', '')
+        except RuntimeError:
+            pass
+        oidc = (oidc or os.environ.get('VERCEL_OIDC_TOKEN', '')).strip()
+        if oidc:
+            return oidc, store_id
+    return None
+
+
+class StorageMissing(Exception):
+    pass
+
+
+STORAGE_MISSING_MESSAGE = 'Shared storage is not connected on Vercel. Add a Blob store to this project and redeploy.'
+
+
 BLOB_STATE_PATH = os.environ.get('BLOB_STATE_PATH', 'stall-state.json')
 
 
@@ -181,8 +223,8 @@ class StateConflict(Exception):
     pass
 
 
-def _read_blob_state(token):
-    store_id = _blob_store_id(token)
+def _read_blob_state(auth):
+    token, store_id = auth
     if not store_id:
         raise RuntimeError('Shared storage token is invalid')
     url = f'https://{store_id}.private.blob.vercel-storage.com/{BLOB_STATE_PATH}?cache=0&t={time.time_ns()}'
@@ -198,10 +240,12 @@ def _read_blob_state(token):
         raise
 
 
-def _write_blob_state(token, payload, etag=None):
+def _write_blob_state(auth, payload, etag=None):
+    token, store_id = auth
     raw = json.dumps(payload).encode('utf-8')
     headers = {
         'authorization': f'Bearer {token}',
+        'x-vercel-blob-store-id': store_id,
         'x-api-version': '12',
         'x-vercel-blob-access': 'private',
         'x-add-random-suffix': '0',
@@ -240,9 +284,11 @@ def _write_file_state(payload):
 
 
 def _read_stall_state_versioned():
-    token = _blob_token()
-    if token:
-        return _read_blob_state(token)
+    auth = _blob_auth()
+    if auth:
+        return _read_blob_state(auth)
+    if os.environ.get('VERCEL'):
+        raise StorageMissing()
     return _read_file_state(), None
 
 
@@ -252,10 +298,12 @@ def _read_stall_state():
 
 def _write_stall_state(payload, etag=None):
     """With an etag, the blob write fails with StateConflict if another server instance saved first."""
-    token = _blob_token()
-    if token:
-        _write_blob_state(token, payload, etag)
+    auth = _blob_auth()
+    if auth:
+        _write_blob_state(auth, payload, etag)
         return
+    if os.environ.get('VERCEL'):
+        raise StorageMissing()
     _write_file_state(payload)
 
 
@@ -264,6 +312,8 @@ def stall_state():
     if request.method == 'GET':
         try:
             return jsonify(_read_stall_state())
+        except StorageMissing:
+            return jsonify({'error': STORAGE_MISSING_MESSAGE, 'storageMissing': True}), 503
         except Exception:
             return jsonify({'error': 'Could not read the shared stall. Try again.'}), 500
 
@@ -352,6 +402,8 @@ def stall_ops():
                     time.sleep(random.uniform(0.05, 0.25) * (attempt + 1))
             else:
                 return jsonify({'error': 'The stall is busy. Retrying.'}), 503
+    except StorageMissing:
+        return jsonify({'error': STORAGE_MISSING_MESSAGE, 'storageMissing': True}), 503
     except Exception:
         return jsonify({'error': 'Could not save the shared stall. Try again.'}), 500
     return jsonify(state)
